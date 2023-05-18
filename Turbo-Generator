@@ -1,0 +1,165 @@
+Sub Generuj_pliki_cenowe()
+    Dim ostatni_wiersz_B As Long
+    Dim ostatni_wiersz_M As Long
+    Dim i As Long
+    Dim rynek As String
+    Dim fulfillment_channel As String
+    Dim reprice As String
+    Dim mnoznik As Double
+    Dim widelki As Double
+    Dim nazwa As String
+    Dim data As String
+    Dim nazwa_pliku As String
+    Dim nazwa_pliku_txt As String
+    Dim sciezka As String
+    Dim new_wb As Workbook
+    Dim new_wb_ws1 As Worksheet
+    Dim new_wb_ws2 As Worksheet
+    Dim usun_dane As String
+    
+    Dim TxtFileName As String, LineText As String
+    Dim MyRange As Range, j, k
+    Dim lastRowTxt As Long
+    
+    Dim dzis As String
+    Dim datatime As String
+    Dim folderSciezka As String
+    
+    
+    ostatni_wiersz_B = Cells(Rows.Count, "B").End(xlUp).Row
+    ostatni_wiersz_M = Cells(Rows.Count, "M").End(xlUp).Row
+    rynek = Range("H5")
+    fulfillment_channel = Range("H8")
+    reprice = Range("H11")
+    mnoznik = Range("H14")
+    widelki = Range("H17")
+    nazwa = Range("H20")
+    data = Format(Now, "dd-mm-yyyy_hhmmss")
+    datatime = Format(Now, "yyyy.mm.dd_hhmmss")
+    dzis = Format(Date, "yyyy.mm.dd")
+    nazwa_pliku = rynek & " " & fulfillment_channel & " - " & nazwa & " - " & mnoznik & " - " & datatime & ".xlsx"
+    nazwa_pliku_txt = rynek & " " & fulfillment_channel & " - " & nazwa & " - " & mnoznik & " - " & datatime & ".txt"
+    sciezka = Range("H23") & "\"
+    folderSciezka = sciezka & dzis
+    usun_dane = Range("H29")
+    
+    
+    For i = 2 To ostatni_wiersz_B
+        If Not IsEmpty(Cells(i, "B")) Then
+            Cells(i, "C").Value = fulfillment_channel
+            Cells(i, "D").Value = reprice
+        Else
+            Exit For
+        End If
+    Next i
+    
+    
+    For i = 2 To ostatni_wiersz_B
+        If Not IsEmpty(Cells(i, "B")) Then
+            Cells(i, "E").Value = Round(Cells(i, "E").Value, 2)
+            Cells(i, "F").Value = Round(Cells(i, "E").Value * mnoznik, 2)
+            
+            If Cells(i, "E").Value < 10 And Cells(i, "F").Value > 10 Then
+                Cells(i, "F").Value = 10
+            End If
+            
+            If Cells(i, "E").Value >= 10 And Cells(i, "E").Value < widelki Then
+                Cells(i, "E").Value = Round(widelki, 2)
+            End If
+            
+            If Cells(i, "E").Value >= Cells(i, "F").Value Then
+                Cells(i, "F").Value = Round(Cells(i, "E").Value + 0.1, 2)
+            End If
+            
+            If Cells(i, "E").Value = 10 And Cells(i, "F").Value = 10 Then
+                Cells(i, "E").Value = 9.99
+                Cells(i, "F").Value = 10
+            End If
+             
+        Else
+            Exit For
+        End If
+    Next i
+    
+    Range("H26") = nazwa_pliku
+    
+    
+    Application.DisplayAlerts = False
+
+    If Len(Dir(folderSciezka, vbDirectory)) = 0 Then
+        MkDir folderSciezka
+    End If
+    
+    
+    Set new_wb = Workbooks.Add
+    
+    Set new_wb_ws1 = new_wb.Sheets(1)
+    new_wb_ws1.Name = "Inventory Configuration"
+    
+    Set new_wb_ws2 = new_wb.Sheets.Add(After:=new_wb.Sheets(new_wb.Sheets.Count))
+    new_wb_ws2.Name = "Listings Configuration"
+    
+    Workbooks("TURBO_Generator.xlsm").Worksheets("Inventory Configuration").Activate
+    Worksheets("Inventory Configuration").Range("A1", Range("A1").End(xlDown).End(xlToRight)).Select
+    Selection.Copy _
+    new_wb.Worksheets("Inventory Configuration").Range("A1")
+    
+    Worksheets("Listings Configuration").Activate
+    Worksheets("Listings Configuration").Range("A1", Range("A1").End(xlDown).End(xlToRight)).Select
+    Selection.Copy _
+    new_wb.Worksheets("Listings Configuration").Range("A1")
+
+    new_wb.SaveAs folderSciezka & "\" & nazwa_pliku, FileFormat:=xlOpenXMLWorkbook, CreateBackup:=False
+    
+    
+    Range("L1") = "sku"
+    Range("M1") = "price"
+    Range("N1") = "minimum-seller-allowed-price"
+    Range("O1") = "maximum-seller-allowed-price"
+    Range("P1") = "quantity"
+    Range("Q1") = "leadtime-to-ship"
+    
+    Range("A2", Range("A2").End(xlDown)).Copy _
+    Range("L2")
+    Range("E2", Range("E2").End(xlDown)).Copy _
+    Range("M2")
+    Range("E2", Range("E2").End(xlDown).End(xlToRight)).Copy _
+    Range("N2")
+    
+    
+    Dim mojZakres As Range
+    Dim mojaKomorka As Range
+    Set mojZakres = Range("M2", Range("M2").End(xlDown).End(xlToRight))
+    
+    If Not (rynek = "UK" Or rynek = "US") Then
+        For Each mojaKomorka In mojZakres
+            If InStr(mojaKomorka.Value, ",") > 0 Then
+                mojaKomorka.Value = Replace(mojaKomorka.Value, ".", ",")
+            End If
+        Next mojaKomorka
+    End If
+    
+    TxtFileName = folderSciezka & "\" & nazwa_pliku_txt
+    
+    Open TxtFileName For Output As #1
+    
+    lastRowTxt = Cells(Rows.Count, 1).End(xlUp).Row
+    Set MyRange = Range("L1").Resize(lastRowTxt, 6)
+    For j = 1 To MyRange.Rows.Count
+        For k = 1 To MyRange.Columns.Count
+            LineText = IIf(k = 1, "", LineText & vbTab) & MyRange.Cells(j, k).Text
+        Next k
+        Print #1, LineText
+    Next j
+
+    Close #1
+    
+    If usun_dane = "Tak" Then
+        Workbooks("TURBO_Generator.xlsm").Worksheets("Listings Configuration").Activate
+        Worksheets("Listings Configuration").Columns("L:Q").Clear
+    End If
+    
+    Application.DisplayAlerts = True
+    
+End Sub
+
